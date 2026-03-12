@@ -1,6 +1,8 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
+use crate::config::{Frequency, Schedule};
+
 const PLIST_LABEL: &str = "com.cargo-cleaner.agent";
 
 pub fn plist_path() -> Result<PathBuf> {
@@ -11,19 +13,43 @@ pub fn plist_path() -> Result<PathBuf> {
         .join(format!("{}.plist", PLIST_LABEL)))
 }
 
-/// Parse "HH:MM" into (hour, minute), defaulting to 02:00 on malformed input.
-pub fn parse_time(preferred_time: &str) -> (u32, u32) {
-    let mut parts = preferred_time.splitn(2, ':');
-    let hour = parts.next().and_then(|s| s.parse().ok()).unwrap_or(2);
-    let minute = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-    (hour.min(23), minute.min(59))
+fn calendar_interval_xml(schedule: &Schedule) -> String {
+    let hour = schedule.hour.min(23);
+    let mut entries = String::new();
+
+    match schedule.frequency {
+        Frequency::Daily => {
+            // Hour only — fires every day
+        }
+        Frequency::Weekly => {
+            let weekday = schedule.day_of_week.unwrap_or(0).min(6);
+            entries.push_str(&format!(
+                "        <key>Weekday</key>\n        <integer>{}</integer>\n",
+                weekday
+            ));
+        }
+        Frequency::Monthly => {
+            let day = schedule.day_of_month.unwrap_or(1).max(1).min(28);
+            entries.push_str(&format!(
+                "        <key>Day</key>\n        <integer>{}</integer>\n",
+                day
+            ));
+        }
+    }
+
+    format!(
+        "    <key>StartCalendarInterval</key>\n    <dict>\n{entries}        <key>Hour</key>\n        <integer>{hour}</integer>\n        <key>Minute</key>\n        <integer>0</integer>\n    </dict>",
+        entries = entries,
+        hour = hour,
+    )
 }
 
-pub fn generate_plist(cli_binary_path: &str, hour: u32, minute: u32) -> String {
+pub fn generate_plist(cli_binary_path: &str, schedule: &Schedule) -> String {
     let home = dirs::home_dir()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
     let cargo_bin_dir = format!("{home}/.cargo/bin");
+    let calendar_interval = calendar_interval_xml(schedule);
 
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -42,13 +68,7 @@ pub fn generate_plist(cli_binary_path: &str, hour: u32, minute: u32) -> String {
         <key>PATH</key>
         <string>{cargo_bin}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>{hour}</integer>
-        <key>Minute</key>
-        <integer>{minute}</integer>
-    </dict>
+{calendar_interval}
     <key>StandardOutPath</key>
     <string>/tmp/cargo-cleaner.log</string>
     <key>StandardErrorPath</key>
@@ -58,12 +78,11 @@ pub fn generate_plist(cli_binary_path: &str, hour: u32, minute: u32) -> String {
         label = PLIST_LABEL,
         binary = cli_binary_path,
         cargo_bin = cargo_bin_dir,
-        hour = hour,
-        minute = minute,
+        calendar_interval = calendar_interval,
     )
 }
 
-pub fn install(cli_binary_path: &str, hour: u32, minute: u32) -> Result<()> {
+pub fn install(cli_binary_path: &str, schedule: &Schedule) -> Result<()> {
     let path = plist_path()?;
 
     if let Some(parent) = path.parent() {
@@ -77,7 +96,7 @@ pub fn install(cli_binary_path: &str, hour: u32, minute: u32) -> Result<()> {
             .output()?;
     }
 
-    let content = generate_plist(cli_binary_path, hour, minute);
+    let content = generate_plist(cli_binary_path, schedule);
     std::fs::write(&path, content)?;
 
     std::process::Command::new("launchctl")
@@ -107,7 +126,7 @@ PLIST="{plist}"
 if [ -f "$PLIST" ]; then
     launchctl unload "$PLIST" 2>/dev/null
     rm "$PLIST"
-    echo "✓ LaunchAgent removed."
+    echo "LaunchAgent removed."
 else
     echo "LaunchAgent not found (already removed)."
 fi

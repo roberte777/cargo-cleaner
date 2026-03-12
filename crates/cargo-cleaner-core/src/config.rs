@@ -12,10 +12,48 @@ pub struct Config {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Frequency {
+    Daily,
+    Weekly,
+    Monthly,
+}
+
+impl Default for Frequency {
+    fn default() -> Self {
+        Frequency::Weekly
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Schedule {
-    pub interval_days: u32,
-    pub preferred_time: String,
+    pub frequency: Frequency,
+    pub hour: u32,
+    pub day_of_week: Option<u32>,
+    pub day_of_month: Option<u32>,
+}
+
+impl Default for Schedule {
+    fn default() -> Self {
+        Self {
+            frequency: Frequency::Weekly,
+            hour: 2,
+            day_of_week: Some(0), // Sunday
+            day_of_month: Some(1),
+        }
+    }
+}
+
+impl Schedule {
+    pub fn interval_days(&self) -> u32 {
+        match self.frequency {
+            Frequency::Daily => 1,
+            Frequency::Weekly => 7,
+            Frequency::Monthly => 30,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,10 +74,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             scan_paths: Vec::new(),
-            schedule: Schedule {
-                interval_days: 7,
-                preferred_time: "02:00".to_string(),
-            },
+            schedule: Schedule::default(),
             permission_mode: PermissionMode::AlwaysAsk,
             dont_ask_windows: Vec::new(),
             exclude_patterns: Vec::new(),
@@ -65,14 +100,7 @@ impl Config {
         let path = Self::config_path()?;
         if path.exists() {
             let contents = std::fs::read_to_string(&path)?;
-            let mut config: Config = serde_json::from_str(&contents)?;
-            // Migrate: empty preferred_time is invalid — the browser's time
-            // input emits a spurious system-default value on first interaction
-            // when given an empty string, causing the field to appear to reset.
-            if config.schedule.preferred_time.is_empty() {
-                config.schedule.preferred_time = "02:00".to_string();
-                config.save()?;
-            }
+            let config: Config = serde_json::from_str(&contents)?;
             Ok(config)
         } else {
             let config = Config::default();
