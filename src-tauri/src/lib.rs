@@ -23,16 +23,18 @@ fn cli_path() -> Result<String, String> {
 #[tauri::command]
 fn save_config(config: tauri::State<ConfigState>, new_config: Config) -> Result<(), String> {
     let mut c = config.0.lock().unwrap();
-    let time_changed = c.schedule.preferred_time != new_config.schedule.preferred_time;
+    let schedule_changed = c.schedule.frequency != new_config.schedule.frequency
+        || c.schedule.hour != new_config.schedule.hour
+        || c.schedule.day_of_week != new_config.schedule.day_of_week
+        || c.schedule.day_of_month != new_config.schedule.day_of_month;
     *c = new_config;
     c.save().map_err(|e| e.to_string())?;
 
-    // If the agent is installed and the preferred time changed, regenerate the
+    // If the agent is installed and the schedule changed, regenerate the
     // plist immediately so the new schedule takes effect without reinstalling.
-    if time_changed && launchagent::is_installed() {
-        let (hour, minute) = launchagent::parse_time(&c.schedule.preferred_time);
+    if schedule_changed && launchagent::is_installed() {
         let path = cli_path()?;
-        launchagent::install(&path, hour, minute).map_err(|e| e.to_string())?;
+        launchagent::install(&path, &c.schedule).map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -102,10 +104,9 @@ fn get_agent_status() -> Result<bool, String> {
 
 #[tauri::command]
 fn install_agent(config: tauri::State<ConfigState>) -> Result<(), String> {
-    let preferred_time = config.0.lock().unwrap().schedule.preferred_time.clone();
-    let (hour, minute) = launchagent::parse_time(&preferred_time);
+    let schedule = config.0.lock().unwrap().schedule.clone();
     let path = cli_path()?;
-    launchagent::install(&path, hour, minute).map_err(|e| e.to_string())
+    launchagent::install(&path, &schedule).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

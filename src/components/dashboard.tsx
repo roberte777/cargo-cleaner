@@ -11,8 +11,8 @@ import type { AppState, Config, CleanSummary } from "@/types";
 interface DashboardProps {
   state: AppState;
   config: Config;
-  nextRun: string | null;
   onCleanComplete: () => void;
+  onRefresh: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -28,7 +28,7 @@ function formatDate(iso: string | null): string {
   return date.toLocaleString();
 }
 
-export function Dashboard({ state, config, nextRun, onCleanComplete }: DashboardProps) {
+export function Dashboard({ state, config, onCleanComplete, onRefresh }: DashboardProps) {
   const [cleaning, setCleaning] = useState(false);
   const [result, setResult] = useState<CleanSummary | null>(null);
   const [agentInstalled, setAgentInstalled] = useState<boolean | null>(null);
@@ -45,19 +45,6 @@ export function Dashboard({ state, config, nextRun, onCleanComplete }: Dashboard
     try {
       await invoke("install_agent");
       setAgentInstalled(true);
-    } catch (e) {
-      setAgentError(String(e));
-    } finally {
-      setAgentLoading(false);
-    }
-  };
-
-  const handleUninstallAgent = async () => {
-    setAgentLoading(true);
-    setAgentError(null);
-    try {
-      await invoke("uninstall_agent");
-      setAgentInstalled(false);
     } catch (e) {
       setAgentError(String(e));
     } finally {
@@ -87,6 +74,12 @@ export function Dashboard({ state, config, nextRun, onCleanComplete }: Dashboard
 
   return (
     <div className="space-y-4 pt-2">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onRefresh}>
+          Refresh
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
@@ -131,12 +124,6 @@ export function Dashboard({ state, config, nextRun, onCleanComplete }: Dashboard
           </CardContent>
         </Card>
       </div>
-
-      {nextRun && (
-        <p className="text-xs text-muted-foreground">
-          Next scheduled run: {formatDate(nextRun)}
-        </p>
-      )}
 
       <Button
         onClick={handleCleanNow}
@@ -201,53 +188,36 @@ export function Dashboard({ state, config, nextRun, onCleanComplete }: Dashboard
         </Card>
       )}
 
-      <Separator />
-
-      <Card>
-        <CardHeader className="pb-2 pt-4 px-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">LaunchAgent</CardTitle>
-            {agentInstalled === true && (
-              <Badge variant="secondary" className="text-xs">Installed</Badge>
-            )}
-            {agentInstalled === false && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">Not installed</Badge>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Runs <code className="font-mono">cargo-cleaner run</code> daily at the scheduled time.
-          </p>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 space-y-3">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={agentInstalled !== false || agentLoading}
-              onClick={handleInstallAgent}
-            >
-              {agentLoading && !agentInstalled ? "Installing…" : "Install"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={agentInstalled !== true || agentLoading}
-              onClick={handleUninstallAgent}
-            >
-              {agentLoading && agentInstalled ? "Uninstalling…" : "Uninstall"}
-            </Button>
-          </div>
-          {agentError && (
-            <p className="text-xs text-destructive">{agentError}</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            If you delete this app without uninstalling, run the uninstall script:<br />
-            <code className="font-mono break-all">
-              ~/Library/Application\ Support/cargo-cleaner/uninstall.sh
-            </code>
-          </p>
-        </CardContent>
-      </Card>
+      {/* Show LaunchAgent card only when not installed */}
+      {agentInstalled === false && (
+        <>
+          <Separator />
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">LaunchAgent</CardTitle>
+                <Badge variant="outline" className="text-xs text-muted-foreground">Not installed</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Install the LaunchAgent to run <code className="font-mono">cargo-cleaner run</code> on your configured schedule.
+              </p>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={agentLoading}
+                onClick={handleInstallAgent}
+              >
+                {agentLoading ? "Installing..." : "Install"}
+              </Button>
+              {agentError && (
+                <p className="text-xs text-destructive">{agentError}</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

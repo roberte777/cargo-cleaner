@@ -256,7 +256,18 @@ fn cmd_status() -> Result<()> {
         }
     }
 
-    println!("\nSchedule: every {} day(s) at {}", config.schedule.interval_days, config.schedule.preferred_time);
+    let freq_label = match config.schedule.frequency {
+        Frequency::Daily => format!("daily at {:02}:00", config.schedule.hour),
+        Frequency::Weekly => {
+            let day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                [config.schedule.day_of_week.unwrap_or(0).min(6) as usize];
+            format!("weekly on {} at {:02}:00", day, config.schedule.hour)
+        }
+        Frequency::Monthly => {
+            format!("monthly on day {} at {:02}:00", config.schedule.day_of_month.unwrap_or(1), config.schedule.hour)
+        }
+    };
+    println!("\nSchedule: {}", freq_label);
     println!("Permission mode: {:?}", config.permission_mode);
     println!("Dry run: {}", config.dry_run);
 
@@ -279,15 +290,22 @@ fn cmd_status() -> Result<()> {
 
 fn cmd_agent_install() -> Result<()> {
     let config = Config::load()?;
-    let (hour, minute) = launchagent::parse_time(&config.schedule.preferred_time);
     let binary_path = std::env::current_exe()?;
     let binary_str = binary_path.to_string_lossy();
-    launchagent::install(&binary_str, hour, minute)?;
+    launchagent::install(&binary_str, &config.schedule)?;
     println!("LaunchAgent installed successfully.");
-    println!(
-        "The cleaner will run daily at {:02}:{:02}.",
-        hour, minute
-    );
+    let freq_label = match config.schedule.frequency {
+        Frequency::Daily => format!("daily at {:02}:00", config.schedule.hour),
+        Frequency::Weekly => {
+            let day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                [config.schedule.day_of_week.unwrap_or(0).min(6) as usize];
+            format!("weekly on {} at {:02}:00", day, config.schedule.hour)
+        }
+        Frequency::Monthly => {
+            format!("monthly on day {} at {:02}:00", config.schedule.day_of_month.unwrap_or(1), config.schedule.hour)
+        }
+    };
+    println!("The cleaner will run {}.", freq_label);
     Ok(())
 }
 

@@ -7,9 +7,13 @@ export interface Config {
   dry_run: boolean;
 }
 
+export type Frequency = "daily" | "weekly" | "monthly";
+
 export interface Schedule {
-  interval_days: number;
-  preferred_time: string;
+  frequency: Frequency;
+  hour: number;
+  day_of_week: number | null;
+  day_of_month: number | null;
 }
 
 export interface TimeWindow {
