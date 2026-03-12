@@ -1,0 +1,24 @@
+# Rust
+/target
+**/target
+
+# Node
+node_modules/
+dist/
+
+# Tauri
+src-tauri/gen/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# Nix / direnv
+.direnv/
+
+# Claude
+.claude/

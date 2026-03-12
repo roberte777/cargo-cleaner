@@ -1,0 +1,4 @@
+[env]
+CC = "/usr/bin/clang"
+CXX = "/usr/bin/clang++"
+LIBRARY_PATH = { value = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib", force = true }

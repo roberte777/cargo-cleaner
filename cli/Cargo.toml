@@ -1,0 +1,17 @@
+[package]
+name = "cargo-cleaner"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cargo-cleaner"
+path = "src/main.rs"
+
+[dependencies]
+cargo-cleaner-core = { path = "../crates/cargo-cleaner-core" }
+clap = { version = "4", features = ["derive"] }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+bytesize = "2"
