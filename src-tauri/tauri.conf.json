@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Cargo Cleaner",
-        "width": 680,
-        "height": 800,
+        "width": 780,
+        "height": 920,
         "resizable": true,
         "decorations": true,
         "visible": true

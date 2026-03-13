@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -11,19 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import type { Config, Frequency } from "@/types";
+import type { CleanSummary, Config, Frequency } from "@/types";
 
 interface ScheduleProps {
   config: Config;
   onSave: (config: Config) => void;
+  lastRun: string | null;
 }
 
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
-  const ampm = i < 12 ? "AM" : "PM";
-  const h12 = i === 0 ? 12 : i > 12 ? i - 12 : i;
-  return { value: String(i), label: `${h12}:00 ${ampm}` };
-});
+function formatTimeValue(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 
 const DAY_OF_WEEK_OPTIONS = [
   { value: "0", label: "Sunday" },
@@ -40,7 +39,43 @@ const DAY_OF_MONTH_OPTIONS = Array.from({ length: 28 }, (_, i) => ({
   label: String(i + 1),
 }));
 
-export function ScheduleView({ config, onSave }: ScheduleProps) {
+export function ScheduleView({ config, onSave, lastRun }: ScheduleProps) {
+  const [nextRun, setNextRun] = useState<string>("…");
+
+  const refreshNextRun = useCallback(() => {
+    invoke<string | null>("get_next_run").then((ts) => {
+      setNextRun(
+        ts
+          ? new Date(ts).toLocaleString(undefined, {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "—"
+      );
+    });
+  }, []);
+
+  // Fetch on mount and whenever the schedule changes
+  useEffect(() => {
+    refreshNextRun();
+  }, [
+    config.schedule.frequency,
+    config.schedule.hour,
+    config.schedule.minute,
+    config.schedule.day_of_week,
+    config.schedule.day_of_month,
+    refreshNextRun,
+  ]);
+
+  // Keep display fresh — re-fetch every minute
+  useEffect(() => {
+    const id = setInterval(refreshNextRun, 60_000);
+    return () => clearInterval(id);
+  }, [refreshNextRun]);
+
   const [agentInstalled, setAgentInstalled] = useState<boolean | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
@@ -86,8 +121,9 @@ export function ScheduleView({ config, onSave }: ScheduleProps) {
     updateSchedule({ frequency: value as Frequency });
   };
 
-  const handleHourChange = (value: string) => {
-    updateSchedule({ hour: parseInt(value) });
+  const handleTimeChange = (value: string) => {
+    const [h, m] = value.split(":").map(Number);
+    updateSchedule({ hour: h, minute: m ?? 0 });
   };
 
   const handleDayOfWeekChange = (value: string) => {
@@ -98,8 +134,22 @@ export function ScheduleView({ config, onSave }: ScheduleProps) {
     updateSchedule({ day_of_month: parseInt(value) });
   };
 
-  const handleDryRunChange = (checked: boolean) => {
-    onSave({ ...config, dry_run: checked });
+  const [dryRunLoading, setDryRunLoading] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<CleanSummary | null>(null);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+
+  const handleDryRunNow = async () => {
+    setDryRunLoading(true);
+    setDryRunResult(null);
+    setDryRunError(null);
+    try {
+      const result = await invoke<CleanSummary>("dry_run_now");
+      setDryRunResult(result);
+    } catch (e) {
+      setDryRunError(String(e));
+    } finally {
+      setDryRunLoading(false);
+    }
   };
 
   return (
@@ -175,45 +225,76 @@ export function ScheduleView({ config, onSave }: ScheduleProps) {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="hour">Hour</Label>
-            <Select
-              value={String(config.schedule.hour)}
-              onValueChange={handleHourChange}
-            >
-              <SelectTrigger id="hour">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {HOUR_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="time">Time</Label>
+            <input
+              id="time"
+              type="time"
+              value={formatTimeValue(config.schedule.hour, config.schedule.minute ?? 0)}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
+            <div>
+              Next run:{" "}
+              <span className="text-foreground font-medium">{nextRun}</span>
+            </div>
+            {lastRun && (
+              <div>
+                Last ran:{" "}
+                <span className="text-foreground font-medium">
+                  {new Date(lastRun).toLocaleString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2 pt-4 px-4">
-          <CardTitle className="text-sm">Dry Run Mode</CardTitle>
+          <CardTitle className="text-sm">Dry Run</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Preview what would be cleaned without deleting anything.
+          </p>
         </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="dry-run">Enable Dry Run</Label>
-              <p className="text-xs text-muted-foreground">
-                Preview what would be cleaned without actually deleting
-                anything.
-              </p>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={dryRunLoading}
+            onClick={handleDryRunNow}
+          >
+            {dryRunLoading ? "Running…" : "Dry Run Now"}
+          </Button>
+          {dryRunError && (
+            <p className="text-xs text-destructive">{dryRunError}</p>
+          )}
+          {dryRunResult && (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
+              <div>
+                Projects scanned:{" "}
+                <span className="text-foreground font-medium">
+                  {dryRunResult.results.length}
+                </span>
+              </div>
+              <div>
+                Would free:{" "}
+                <span className="text-foreground font-medium">
+                  {dryRunResult.total_freed_bytes >= 1_073_741_824
+                    ? `${(dryRunResult.total_freed_bytes / 1_073_741_824).toFixed(1)} GB`
+                    : `${(dryRunResult.total_freed_bytes / 1_048_576).toFixed(1)} MB`}
+                </span>
+              </div>
             </div>
-            <Switch
-              id="dry-run"
-              checked={config.dry_run}
-              onCheckedChange={handleDryRunChange}
-            />
-          </div>
+          )}
         </CardContent>
       </Card>
 

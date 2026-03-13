@@ -149,7 +149,7 @@ export function Dashboard({ state, config, onCleanComplete, onRefresh }: Dashboa
           </CardHeader>
           {result.results.length > 0 && (
             <CardContent className="px-4 pb-4">
-              <ScrollArea className="h-32">
+              <div className="max-h-32 overflow-y-auto">
                 {result.results.map((r, i) => (
                   <div
                     key={i}
@@ -163,7 +163,7 @@ export function Dashboard({ state, config, onCleanComplete, onRefresh }: Dashboa
                     </span>
                   </div>
                 ))}
-              </ScrollArea>
+              </div>
             </CardContent>
           )}
         </Card>
@@ -177,13 +177,13 @@ export function Dashboard({ state, config, onCleanComplete, onRefresh }: Dashboa
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <ScrollArea className="h-32">
+            <div className="max-h-32 overflow-y-auto">
               {state.last_cleaned_projects.map((p, i) => (
-                <p key={i} className="text-xs font-mono py-1 border-b last:border-0">
+                <p key={i} className="text-xs font-mono py-1 border-b last:border-0 truncate" title={p}>
                   {p}
                 </p>
               ))}
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}

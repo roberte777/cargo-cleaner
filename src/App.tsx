@@ -37,7 +37,7 @@ function App() {
           <Directories config={config} onSave={saveConfig} />
         </TabsContent>
         <TabsContent value="schedule" className="flex-1 overflow-auto">
-          <ScheduleView config={config} onSave={saveConfig} />
+          <ScheduleView config={config} onSave={saveConfig} lastRun={state.last_run} />
         </TabsContent>
         <TabsContent value="permissions" className="flex-1 overflow-auto">
           <Permissions config={config} onSave={saveConfig} />

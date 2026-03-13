@@ -12,6 +12,7 @@ export type Frequency = "daily" | "weekly" | "monthly";
 export interface Schedule {
   frequency: Frequency;
   hour: number;
+  minute: number;
   day_of_week: number | null;
   day_of_month: number | null;
 }

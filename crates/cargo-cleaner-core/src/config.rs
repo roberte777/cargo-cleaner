@@ -31,6 +31,7 @@ impl Default for Frequency {
 pub struct Schedule {
     pub frequency: Frequency,
     pub hour: u32,
+    pub minute: u32,
     pub day_of_week: Option<u32>,
     pub day_of_month: Option<u32>,
 }
@@ -40,6 +41,7 @@ impl Default for Schedule {
         Self {
             frequency: Frequency::Weekly,
             hour: 2,
+            minute: 0,
             day_of_week: Some(0), // Sunday
             day_of_month: Some(1),
         }

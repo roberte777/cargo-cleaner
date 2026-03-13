@@ -25,6 +25,7 @@ fn save_config(config: tauri::State<ConfigState>, new_config: Config) -> Result<
     let mut c = config.0.lock().unwrap();
     let schedule_changed = c.schedule.frequency != new_config.schedule.frequency
         || c.schedule.hour != new_config.schedule.hour
+        || c.schedule.minute != new_config.schedule.minute
         || c.schedule.day_of_week != new_config.schedule.day_of_week
         || c.schedule.day_of_month != new_config.schedule.day_of_month;
     *c = new_config;
@@ -81,6 +82,16 @@ async fn clean_now(
 }
 
 #[tauri::command]
+async fn dry_run_now(
+    config: tauri::State<'_, ConfigState>,
+) -> Result<CleanSummary, String> {
+    let c = config.0.lock().unwrap().clone();
+    let projects =
+        scanner::scan_for_projects(&c.scan_paths, &c.exclude_patterns).map_err(|e| e.to_string())?;
+    cleaner::clean_projects(&projects, true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn pick_directory() -> Result<Option<String>, String> {
     let output = std::process::Command::new("osascript")
         .arg("-e")
@@ -120,8 +131,11 @@ fn get_next_run(
     state: tauri::State<AppStateWrapper>,
 ) -> Result<Option<String>, String> {
     let c = config.0.lock().unwrap();
-    let s = state.0.lock().unwrap();
-    Ok(scheduler::next_run_time(&c, &s).map(|t| t.to_rfc3339()))
+    // Re-read state from disk to pick up runs made by the CLI / LaunchAgent.
+    let fresh = AppState::load().map_err(|e| e.to_string())?;
+    let mut s = state.0.lock().unwrap();
+    *s = fresh.clone();
+    Ok(scheduler::next_run_time(&c, &fresh).map(|t| t.to_rfc3339()))
 }
 
 pub fn run() {
@@ -139,6 +153,7 @@ pub fn run() {
             get_state,
             scan_projects,
             clean_now,
+            dry_run_now,
             pick_directory,
             get_agent_status,
             install_agent,

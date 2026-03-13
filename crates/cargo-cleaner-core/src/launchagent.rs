@@ -15,6 +15,7 @@ pub fn plist_path() -> Result<PathBuf> {
 
 fn calendar_interval_xml(schedule: &Schedule) -> String {
     let hour = schedule.hour.min(23);
+    let minute = schedule.minute.min(59);
     let mut entries = String::new();
 
     match schedule.frequency {
@@ -38,9 +39,10 @@ fn calendar_interval_xml(schedule: &Schedule) -> String {
     }
 
     format!(
-        "    <key>StartCalendarInterval</key>\n    <dict>\n{entries}        <key>Hour</key>\n        <integer>{hour}</integer>\n        <key>Minute</key>\n        <integer>0</integer>\n    </dict>",
+        "    <key>StartCalendarInterval</key>\n    <dict>\n{entries}        <key>Hour</key>\n        <integer>{hour}</integer>\n        <key>Minute</key>\n        <integer>{minute}</integer>\n    </dict>",
         entries = entries,
         hour = hour,
+        minute = minute,
     )
 }
 
@@ -69,6 +71,8 @@ pub fn generate_plist(cli_binary_path: &str, schedule: &Schedule) -> String {
         <string>{cargo_bin}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 {calendar_interval}
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
     <key>StandardOutPath</key>
     <string>/tmp/cargo-cleaner.log</string>
     <key>StandardErrorPath</key>

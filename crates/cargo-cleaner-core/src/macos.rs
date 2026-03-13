@@ -9,9 +9,20 @@ Clean now?" buttons {{"Cancel", "Clean"}} default button "Clean" with title "Car
         projects_count, total_size_display
     );
 
-    let output = Command::new("osascript").args(["-e", &script]).output()?;
-
-    Ok(output.status.success())
+    match Command::new("osascript").args(["-e", &script]).output() {
+        Ok(output) => Ok(output.status.success()),
+        Err(_) => {
+            // Dialog unavailable (no GUI session) — notify the user instead.
+            let _ = send_notification(
+                "Cargo Cleaner",
+                &format!(
+                    "{} project(s) ready to clean ({}) — open the app to clean now.",
+                    projects_count, total_size_display
+                ),
+            );
+            Ok(false)
+        }
+    }
 }
 
 pub fn send_notification(title: &str, message: &str) -> Result<()> {
